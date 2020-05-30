@@ -585,10 +585,42 @@ sfs_io_nolock(struct sfs_fs *sfs, struct sfs_inode *sin, void *buf, off_t offset
 
     int ret = 0;
     size_t size, alen = 0;
-    uint32_t ino;
+    uint32_t ino = 0;
     uint32_t blkno = offset / SFS_BLKSIZE;          // The NO. of Rd/Wr begin block
     uint32_t nblks = endpos / SFS_BLKSIZE - blkno;  // The size of Rd/Wr blocks
 
+    if ((blkoff = offset % SFS_BLKSIZE) != 0) {     //计算出在第一块数据块中进行读或写操作的偏移量
+        //ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino);
+        size = (nblks != 0)? (SFS_BLKSIZE - blkoff) : (endpos - offset);  //计算数据长度
+        ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino); //获取数据块编号
+        ret = sfs_buf_op(sfs, buf, size, ino, blkoff);  //写入磁盘
+        if (ret != 0) {
+            goto out;
+        }       
+        
+        alen += size;  //更新已读写的数据
+        blkno++;
+        
+    } 
+    //size = SFS_BLKSIZE;
+    if (nblks>0) {
+        ret = sfs_bmap_load_nolock(sfs, sin, blkno, &ino);
+        ret = sfs_block_op(sfs, buf, ino, nblks);
+        if (ret != 0) {
+            goto out;
+        }       
+        alen += nblks * SFS_BLKSIZE;
+    }
+
+    if (offset + alen < endpos) {
+        ret = sfs_bmap_load_nolock(sfs, sin, blkno + nblks, &ino);
+        ret = sfs_buf_op(sfs, buf, endpos % SFS_BLKSIZE, ino, 0);
+        if (ret != 0) {
+            goto out;
+        }       
+        
+        alen += endpos % SFS_BLKSIZE;
+    }
   //LAB8:EXERCISE1 YOUR CODE HINT: call sfs_bmap_load_nolock, sfs_rbuf, sfs_rblock,etc. read different kind of blocks in file
 	/*
 	 * (1) If offset isn't aligned with the first block, Rd/Wr some content from offset to the end of the first block
