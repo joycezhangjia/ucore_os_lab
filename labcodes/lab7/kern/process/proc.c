@@ -125,16 +125,6 @@ alloc_proc(void) {
      *       uint32_t wait_state;                        // waiting state
      *       struct proc_struct *cptr, *yptr, *optr;     // relations between processes
 	 */
-     //LAB6 YOUR CODE : (update LAB5 steps)
-    /*
-     * below fields(add in LAB6) in proc_struct need to be initialized
-     *     struct run_queue *rq;                       // running queue contains Process
-     *     list_entry_t run_link;                      // the entry linked in run queue
-     *     int time_slice;                             // time slice for occupying the CPU
-     *     skew_heap_entry_t lab6_run_pool;            // FOR LAB6 ONLY: the entry in the run pool
-     *     uint32_t lab6_stride;                       // FOR LAB6 ONLY: the current stride of the process
-     *     uint32_t lab6_priority;                     // FOR LAB6 ONLY: the priority of process, set by lab6_set_priority(uint32_t)
-     */
     }
     return proc;
 }
@@ -397,17 +387,16 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     }
     ret = -E_NO_MEM;
 
-    if ((proc = alloc_proc()) == NULL) {
-        goto fork_out;
-    }
+    proc = alloc_proc(); // 分配线程控制块的空间
+    if (proc == NULL) goto fork_out;
 
     proc->parent = current;
     assert(current->wait_state == 0);
 
-    if (setup_kstack(proc) != 0) {
+    if (setup_kstack(proc) != 0) {   //为新的线程设置栈
         goto bad_fork_cleanup_proc;
     }
-    if (copy_mm(clone_flags, proc) != 0) {
+    if (copy_mm(clone_flags, proc) != 0) {  //拷贝虚拟空间
         goto bad_fork_cleanup_kstack;
     }
     copy_thread(proc, stack, tf);
@@ -415,13 +404,14 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     bool intr_flag;
     local_intr_save(intr_flag);
     {
-        proc->pid = get_pid();
-        set_links(proc);
-        hash_proc(proc);
+        proc->pid = get_pid();  //创建pid
+        set_links(proc);        //将线程放入链表
+        hash_proc(proc);        //线程数+1
+        //list_add(&proc_list, &(proc->list_link)); //将线程加入所有线程的链表
     }
     local_intr_restore(intr_flag);
 
-    wakeup_proc(proc);
+    wakeup_proc(proc);   //唤醒该线程
 
     ret = proc->pid;
 
@@ -653,7 +643,8 @@ load_icode(unsigned char *binary, size_t size) {
     tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
     tf->tf_esp = USTACKTOP;
     tf->tf_eip = elf->e_entry;
-    tf->tf_eflags |= FL_IF;
+    //tf->tf_eflags = 0x00000002 | FL_IF;
+    //tf->tf_eflags = FL_IF;
     /* LAB5:EXERCISE1 YOUR CODE
      * should set tf_cs,tf_ds,tf_es,tf_ss,tf_esp,tf_eip,tf_eflags
      * NOTICE: If we set trapframe correctly, then the user level process can return to USER MODE from kernel. So
