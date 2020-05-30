@@ -86,6 +86,19 @@ static struct proc_struct *
 alloc_proc(void) {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
     if (proc != NULL) {
+        memset(proc, 0, sizeof(struct proc_struct));
+        
+        proc->state = PROC_UNINIT; 
+        proc->pid = -1;
+        proc->runs = 0;
+        proc->kstack = 0;
+        proc->need_resched = 0;
+        proc->parent = NULL;
+        proc->mm = NULL;
+        memset(&proc->context, 0, sizeof(struct context)); 
+        proc->tf = NULL;
+        proc->cr3 = PADDR(boot_pgdir);
+        proc->flags = 0;
     //LAB4:EXERCISE1 YOUR CODE
     /*
      * below fields in proc_struct need to be initialized
@@ -271,6 +284,33 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
         goto fork_out;
     }
     ret = -E_NO_MEM;
+    proc = alloc_proc(); // 分配线程控制块的空间
+    if (proc == NULL) goto fork_out;
+
+    proc->parent = current;
+
+    if (setup_kstack(proc) != 0) {   //为新的线程设置栈
+        goto bad_fork_cleanup_proc;
+    }
+    if (copy_mm(clone_flags, proc) != 0) {  //拷贝虚拟空间
+        goto bad_fork_cleanup_kstack;
+    }
+    copy_thread(proc, stack, tf);
+
+    bool intr_flag;
+    local_intr_save(intr_flag);
+    {
+        proc->pid = get_pid();  //创建pid
+        hash_proc(proc);        //将线程放入链表
+        nr_process ++;          //线程数+1
+        list_add(&proc_list, &(proc->list_link)); //将线程加入所有线程的链表
+    }
+    local_intr_restore(intr_flag);
+
+    wakeup_proc(proc);  //唤醒该线程
+
+    ret = proc->pid;
+
     //LAB4:EXERCISE2 YOUR CODE
     /*
      * Some Useful MACROs, Functions and DEFINEs, you can use them in below implementation.
