@@ -1,0 +1,67 @@
+--- lab3/kern/mm/default_pmm.c	2020-05-30 16:44:26.107191126 +0800
++++ lab2/kern/mm/default_pmm.c	2020-05-30 09:52:14.710631774 +0800
+@@ -111,6 +111,7 @@
+     for (; p != base + n; p ++) {
+         assert(PageReserved(p));
+         p->flags = p->property = 0;
++        //SetPageProperty(p);
+         set_page_ref(p, 0);
+     }
+     base->property = n;
+@@ -127,7 +128,6 @@
+     }
+     struct Page *page = NULL;
+     list_entry_t *le = &free_list;
+-    // TODO: optimize (next-fit)
+     while ((le = list_next(le)) != &free_list) {
+         struct Page *p = le2page(le, page_link);
+         if (p->property >= n) {
+@@ -136,14 +136,15 @@
+         }
+     }
+     if (page != NULL) {
++        //list_del(&(page->page_link));
+         if (page->property > n) {
+             struct Page *p = page + n;
+             p->property = page->property - n;
+             SetPageProperty(p);
+-            list_add_after(&(page->page_link), &(p->page_link));
+-        }
+-        list_del(&(page->page_link));
++            list_add_before(&(page->page_link), &(p->page_link));
++    }
+         nr_free -= n;
++        list_del(&(page->page_link));
+         ClearPageProperty(page);
+     }
+     return page;
+@@ -164,7 +165,6 @@
+     while (le != &free_list) {
+         p = le2page(le, page_link);
+         le = list_next(le);
+-        // TODO: optimize
+         if (base + base->property == p) {
+             base->property += p->property;
+             ClearPageProperty(p);
+@@ -178,14 +178,13 @@
+         }
+     }
+     nr_free += n;
+-    le = list_next(&free_list);
+-    while (le != &free_list) {
++    for (le = list_next(&free_list);le != &free_list;le = list_next(le))
++    {
+         p = le2page(le, page_link);
+         if (base + base->property <= p) {
+             assert(base + base->property != p);
+             break;
+         }
+-        le = list_next(le);
+     }
+     list_add_before(le, &(base->page_link));
+ }
+@@ -320,3 +319,4 @@
+     .nr_free_pages = default_nr_free_pages,
+     .check = default_check,
+ };
++
