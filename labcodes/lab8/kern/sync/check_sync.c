@@ -120,6 +120,7 @@ int philosopher_using_semaphore(void * arg) /* i：哲学家号码，从0到N-1 
     { /* 无限循环 */
         cprintf("Iter %d, No.%d philosopher_sema is thinking\n",iter,i); /* 哲学家正在思考 */
         do_sleep(SLEEP_TIME);
+
         phi_take_forks_sema(i); 
         /* 需要两只叉子，或者阻塞 */
         cprintf("Iter %d, No.%d philosopher_sema is eating\n",iter,i); /* 进餐 */
@@ -181,30 +182,30 @@ void phi_test_condvar (i) {
 
 
 void phi_take_forks_condvar(int i) {
-     down(&(mtp->mutex));
+     down(&(mtp->mutex));        //获取锁
      state_condvar[i] = HUNGRY;
-     phi_test_condvar(i);
+     phi_test_condvar(i);        //根据左右两边的状态判断当前是否可以就餐
 
     if (state_condvar[i] != EATING)
     {
         cprintf("phi_take_forks_condvar: %d didn't get fork and will wait\n",i);
-        cond_wait(&mtp->cv[i]);
+        cond_wait(&mtp->cv[i]);  //等锁
     }
 //--------into routine in monitor--------------
      // LAB7 EXERCISE1: YOUR CODE
      // I am hungry
      // try to get fork
 //--------leave routine in monitor--------------
-    if (mtp->next_count > 0)
+    if (mtp->next_count > 0)  //释放管程的锁
         up(&(mtp->next));
     else
         up(&(mtp->mutex));
 }
 
 void phi_put_forks_condvar(int i) {
-    down(&(mtp->mutex));
-    state_condvar[i] = THINKING;
-    phi_test_condvar(LEFT);
+    down(&(mtp->mutex));       //获取锁
+    state_condvar[i] = THINKING;  //进入思考
+    phi_test_condvar(LEFT);       //判断左右状态
     phi_test_condvar(RIGHT);
 //--------into routine in monitor--------------
      // LAB7 EXERCISE1: YOUR CODE
